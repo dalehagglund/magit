@@ -1933,8 +1933,13 @@ the actions."
   "Run FUNC until end of buffer is reached.
 
 FUNC should leave point at the end of the modified region"
-  (while (and (not (eobp))
-              (funcall func))))
+  (let (start)
+    (while (and (not (eobp))
+                (progn
+                  (setq start (point))
+                  (funcall func)))
+      (if (eq (point) start)
+          (error "Didn't advance point during `magit-wash-sequence'")))))
 
 (defmacro magit-define-command (sym arglist &rest body)
   "Macro to define a magit command.
