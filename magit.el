@@ -4559,23 +4559,16 @@ toggled on."
     (magit-log-edit-set-fields fields)
     result))
 
-(defun magit-log-edit-setup-author-env (author)
-  "Set GIT_AUTHOR_* variables from AUTHOR spec.
-If AUTHOR is nil, honor default values from
-environment (potentially empty)."
+(defun magit-log-edit-extract-author-data (author)
+  "Extract author name, author email, and commit date from author info."
   (when author
     ;; XXX - this is a bit strict, probably.
     (or (string-match "\\(.*\\) <\\(.*\\)>\\(?:,\\s-*\\(.+\\)\\)?" author)
         (error "Can't parse author string"))
-    ;; Shucks, setenv destroys the match data.
     (let ((name (match-string 1 author))
           (email (match-string 2 author))
           (date  (match-string 3 author)))
-      (make-local-variable 'process-environment)
-      (setenv "GIT_AUTHOR_NAME" name)
-      (setenv "GIT_AUTHOR_EMAIL" email)
-      (if date
-          (setenv "GIT_AUTHOR_DATE" date)))))
+      (list name email date))))
 
 (defun magit-log-edit-push-to-comment-ring (comment)
   (when (or (ring-empty-p log-edit-comment-ring)
@@ -4596,7 +4589,11 @@ environment (potentially empty)."
                      magit-commit-signoff))
          (tag-rev (cdr (assq 'tag-rev fields)))
          (tag-name (cdr (assq 'tag-name fields)))
-         (author (cdr (assq 'author fields)))
+         (author-data
+          (magit-log-edit-extract-author-data (cdr (assq 'author fields))))
+         (author-name (car author-data))
+         (author-email (cadr author-data))
+         (author-date (caddr author-data))
          (tag-options (cdr (assq 'tag-options fields))))
 
     (unless (or (magit-anything-staged-p)
@@ -4613,29 +4610,34 @@ environment (potentially empty)."
                                     'magit-log-edit-toggle-allow-empty)))))
 
     (magit-log-edit-push-to-comment-ring (buffer-string))
-    (magit-log-edit-setup-author-env author)
     (magit-log-edit-set-fields nil)
     (magit-log-edit-cleanup)
     (if (= (buffer-size) 0)
         (insert "(Empty description)\n"))
-    (let ((env process-environment)
-          (commit-buf (current-buffer)))
+    (let ((commit-buf (current-buffer))
+          (process-environment
+           (append (when author-name
+                     (list (concat "GIT_AUTHOR_NAME=" author-name)))
+                   (when author-email
+                     (list (concat "GIT_AUTHOR_EMAIL=" author-email)))
+                   (when author-date
+                     (list (concat "GIT_AUTHOR_DATE=" author-date)))
+                   process-environment)))
       (with-current-buffer (magit-find-status-buffer default-directory)
-        (let ((process-environment env))
-          (cond (tag-name
-                 (apply #'magit-run-git-with-input commit-buf
-                        "tag" (append tag-options (list tag-name "-a" "-F" "-" tag-rev))))
-                (t
-                 (apply #'magit-run-async-with-input commit-buf
-                        magit-git-executable
-                        (append magit-git-standard-options
-                                '("commit")
-                                magit-custom-options
-                                '("-F" "-")
-                                (if (and commit-all (not allow-empty)) '("--all") '())
-                                (if amend '("--amend") '())
-                                (if allow-empty '("--allow-empty"))
-                                (if sign-off '("--signoff") '()))))))))
+        (cond (tag-name
+               (apply #'magit-run-git-with-input commit-buf
+                      "tag" (append tag-options (list tag-name "-a" "-F" "-" tag-rev))))
+              (t
+               (apply #'magit-run-async-with-input commit-buf
+                      magit-git-executable
+                      (append magit-git-standard-options
+                              '("commit")
+                              magit-custom-options
+                              '("-F" "-")
+                              (if (and commit-all (not allow-empty)) '("--all") '())
+                              (if amend '("--amend") '())
+                              (if allow-empty '("--allow-empty"))
+                              (if sign-off '("--signoff") '())))))))
     ;; shouldn't we kill that buffer altogether?
     (erase-buffer)
     (let ((magit-buf magit-buffer-internal))
