@@ -37,13 +37,14 @@
       ("-am" "All match" "--all-match")
       ("-al" "All" "--all"))
      (arguments
-      ("=r" "Relative" "--relative=" read-directory-name)
+      ("=rel" "Relative" "--relative=" read-directory-name)
       ("=c" "Committer" "--committer=" read-from-minibuffer)
       ("=>" "Since" "--since=" read-from-minibuffer)
       ("=<" "Before" "--before=" read-from-minibuffer)
       ("=s" "Pickaxe search" "-S" read-from-minibuffer)
       ("=a" "Author" "--author=" read-from-minibuffer)
-      ("=g" "Grep" "--grep=" read-from-minibuffer)))
+      ("=g" "Grep" "--grep=" read-from-minibuffer)
+      ("=ref" "Ref pattern" "--glob=" read-from-minibuffer)))
 
     (running
      (actions
